@@ -1,6 +1,9 @@
 # halo-2.25.4-exp
 导入插件：http://192.168.49.128:8090/console/plugins
 <img width="692" height="506" alt="image" src="https://github.com/user-attachments/assets/4282b8bb-a110-4708-bcca-13c0279abe2b" />
+
+返回200，插件已安装
+
 <img width="1874" height="730" alt="image" src="https://github.com/user-attachments/assets/8a1026e3-0d4c-4cb6-9573-8721dc170afe" />
 <img width="692" height="545" alt="image" src="https://github.com/user-attachments/assets/fb4fb9cf-f3e1-4eb3-9c61-0e0e7f3d5772" />
 
