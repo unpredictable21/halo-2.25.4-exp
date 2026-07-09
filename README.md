@@ -5,4 +5,5 @@
 <img width="692" height="96" alt="image" src="https://github.com/user-attachments/assets/45fa62ac-1301-4215-82cb-048e48ca72bf" />
 成功保存到服务器本地/tmp/halo-poc-pwned.txt
 <img width="1874" height="730" alt="image" src="https://github.com/user-attachments/assets/8a1026e3-0d4c-4cb6-9573-8721dc170afe" />
-![Uploading image.png…]()
+<img width="692" height="96" alt="image" src="https://github.com/user-attachments/assets/24c120ed-78dc-454b-bb81-f2e56dde40ea" />
+
