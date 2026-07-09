@@ -16,11 +16,11 @@ chmod +x build-plugin.sh
 
 ./build-plugin.sh
 
-#### 漏洞描述
+#### Vulnerability Description
 
 `PluginEndpoint` Provides an endpoint to install/upgrade plugins from a URI. After receiving the URI provided by the user, through `ReactiveUrlDataBufferFetcher` Download the JAR file and save it to a temporary file, then load it as a plugin using the PF4J framework. After PF4J loads it, Spring's `DefaultPluginApplicationContextFactory` Automatic instantiation `plugin.yaml` All the extended classes declared in the middle are Spring Bean。
 
-#### 攻击链
+#### Attack chain
 
 1. `PluginEndpoint.installFromUri()` Receive user URI (**no whitelist check**)
 2. `DefaultReactiveUrlDataBufferFetcher.fetch(uri)` Download JAR
@@ -43,7 +43,7 @@ return Mono.usingWhen(writeToTempFile(content), pluginService::install, this::de
 - An attacker with plugin management permissions can directly gain remote control of the server
 - Complete system compromise, data theft, lateral movement
 
-导入插件：http://192.168.49.128:8090/console/plugins
+Import plugin：http://192.168.49.128:8090/console/plugins
 
 <img width="692" height="506" alt="image" src="https://github.com/user-attachments/assets/4282b8bb-a110-4708-bcca-13c0279abe2b" />
 
