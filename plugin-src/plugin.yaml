@@ -1,0 +1,13 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: poc-rce-plugin
+spec:
+  displayName: "RCE PoC Plugin"
+  description: "Proof of Concept - Remote Code Execution"
+  version: "1.0.0"
+  requires: ">=2.0.0"
+  author:
+    name: "Security Researcher"
+    website: "https://example.com"
+  pluginClass: run.halo.app.plugin.PocPlugin
