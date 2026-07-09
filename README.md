@@ -81,6 +81,10 @@ Content-Type: application/json
 
 The server processes the installation, fetches the artifact from the attacker's server, registers the extension, and executes the compiled system command, compromising the target host.
 
+<img width="692" height="545" alt="image" src="https://github.com/user-attachments/assets/62a59fa2-1a4f-4f5a-b140-4d3366648ecb" />
+
+<img width="692" height="96" alt="image" src="https://github.com/user-attachments/assets/3131de9d-392e-4672-b28e-aea7f7860245" />
+
 ## 7. Impact
 
 - **System Compromise:** Full access to the hosting infrastructure or Docker container under the privileges of the application process.
